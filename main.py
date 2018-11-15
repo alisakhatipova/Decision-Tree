@@ -1,9 +1,9 @@
 import pydot
 import numpy as np
 from math import log
-import random
 
 global_node_count = 0
+
 
 def inform_gain(attrs, classes, value):
     """
@@ -71,16 +71,22 @@ def majority_class(classes):
     Calculate the majority class for the attribute
     Needed in case when no more splits are possible
     """
-    num_pos = classes[np.where(classes == 1)]
+    num_pos = len(classes[np.where(classes == 1)])
     num_neg = len(classes) - num_pos
     return 1 if num_pos > num_neg else 0
 
 
 def TDIDT(data, node):
+    classes = data["class_label"].astype(int)
+    # stuff for visualization
     global global_node_count
     node['id'] = global_node_count
     global_node_count += 1
-    classes = data["class_label"].astype(int)
+    num_pos = len(classes[np.where(classes == 1)])
+    num_neg = len(classes) - num_pos
+    node['neg'] = num_neg
+    node['pos'] = num_pos
+    # the main algorithm
     attrs = data.dtype.names
     attrs = [x for x in attrs if x != "class_label"]
     are_equal = np.all([classes[i] == classes[0] for i in range(len(classes))])
@@ -115,12 +121,19 @@ def add_node(graph, node, parent):
     """
     Add node to the graph
     """
+    neg = node['neg']
+    pos = node['pos']
+    total = str(neg + pos)
+    neg = str(neg)
+    pos = str(pos)
+    samples_info = total + ' samples\n' + neg + ' of class 0, ' + pos + ' of class 1'
     if 'final_class' in node:
-        res = str(node['id']) + '. final class is ' + str(node['final_class'])
-        print(res)
-        new_node = pydot.Node(res)
+        legend = str(node['id']) + '. final class is ' + str(node['final_class']) + '\n' + samples_info
+        new_node = pydot.Node(legend)
     else:
-        new_node = pydot.Node(str(node['id']) + '. ' + node['split_attr'] + ' < ' + str(node['split_value']))
+        legend = str(node['id']) + '. ' + node['split_attr'] + \
+                 ' < ' + str(node['split_value']) + '\n' + samples_info
+        new_node = pydot.Node(legend)
     graph.add_node(new_node)
     if parent:
         graph.add_edge(pydot.Edge(parent, new_node))
