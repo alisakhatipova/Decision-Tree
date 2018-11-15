@@ -1,14 +1,23 @@
+import pydot
 import numpy as np
 from math import log
+import random
 
+global_node_count = 0
 
 def inform_gain(attrs, classes, value):
+    """
+    Calculate information gain
+    """
     result = entropy(attrs, classes)
     result -= cond_entropy(attrs, classes, value)
     return result
 
 
 def entropy(attrs, classes):
+    """
+    Calculate entropy
+    """
     total = len(attrs)
     pos = len(attrs[np.where(classes == 1)])
     neg = len(attrs[np.where(classes == 0)])
@@ -23,6 +32,9 @@ def entropy(attrs, classes):
 
 
 def cond_entropy(attrs, classes, value):
+    """
+    Calculate conditional entropy
+    """
     total = len(attrs)
     left_split = attrs[np.where(attrs < value)]
     right_split = attrs[np.where(attrs >= value)]
@@ -35,6 +47,10 @@ def cond_entropy(attrs, classes, value):
 
 
 def choose_split_value(attrs, classes):
+    """
+    Choose split value for the continious attribute
+    that maximizes information gain
+    """
     indices = np.argsort(attrs)
     classes = classes[indices]
     attrs = attrs[indices]
@@ -51,21 +67,28 @@ def choose_split_value(attrs, classes):
 
 
 def majority_class(classes):
+    """
+    Calculate the majority class for the attribute
+    Needed in case when no more splits are possible
+    """
     num_pos = classes[np.where(classes == 1)]
     num_neg = len(classes) - num_pos
     return 1 if num_pos > num_neg else 0
 
 
 def TDIDT(data, node):
+    global global_node_count
+    node['id'] = global_node_count
+    global_node_count += 1
     classes = data["class_label"].astype(int)
     attrs = data.dtype.names
     attrs = [x for x in attrs if x != "class_label"]
     are_equal = np.all([classes[i] == classes[0] for i in range(len(classes))])
     if are_equal:
-        node['final_class'] = data[0]
+        node['final_class'] = classes[0]
         return
     if len(attrs) == 0:
-        node['final_class'] = majority_class(data["class_label"].astype(int))
+        node['final_class'] = majority_class(classes)
         return
     max_gain = 0.0
     max_gain_attr = None
@@ -81,17 +104,45 @@ def TDIDT(data, node):
     node['left_child'] = {}
     node['right_child'] = {}
     left_data = data[np.where(data[max_gain_attr] < max_gain_split_value)]
-    left_data = left_data[[b for b in list(attrs) if b != max_gain_attr]]
+    left_data = left_data[[b for b in list(left_data.dtype.names) if b != max_gain_attr]]
     right_data = data[np.where(data[max_gain_attr] >= max_gain_split_value)]
-    right_data = right_data[[b for b in list(attrs) if b != max_gain_attr]]
+    right_data = right_data[[b for b in list(right_data.dtype.names) if b != max_gain_attr]]
     TDIDT(left_data, node['left_child'])
     TDIDT(right_data, node['right_child'])
 
 
-# if __name__ == "__main__":
-path_to_csv = "gene_expression_training.csv"
-data = np.genfromtxt(path_to_csv, dtype=float, delimiter=',', names=True)
-tree = {}
-TDIDT(data, tree)
-# all_attrs = data.dtype.names
-# all_attrs = [x for x in all_attrs if x != "class_label"]
+def add_node(graph, node, parent):
+    """
+    Add node to the graph
+    """
+    if 'final_class' in node:
+        res = str(node['id']) + '. final class is ' + str(node['final_class'])
+        print(res)
+        new_node = pydot.Node(res)
+    else:
+        new_node = pydot.Node(str(node['id']) + '. ' + node['split_attr'] + ' < ' + str(node['split_value']))
+    graph.add_node(new_node)
+    if parent:
+        graph.add_edge(pydot.Edge(parent, new_node))
+    if 'left_child' in node:
+        add_node(graph, node['left_child'], new_node)
+    if 'right_child' in node:
+        add_node(graph, node['right_child'], new_node)
+
+
+def save_dot(tree):
+    """
+    Visualize the resulting decision tree
+    """
+    graph = pydot.Dot(graph_type='graph')
+    add_node(graph, tree, None)
+    graph.write_png('out_graph.png')
+
+
+if __name__ == "__main__":
+    path_to_csv = "gene_expression_training.csv"
+    data = np.genfromtxt(path_to_csv, dtype=float, delimiter=',', names=True)
+    tree = {}
+    TDIDT(data, tree)
+    print(tree)
+    save_dot(tree)
